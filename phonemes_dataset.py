@@ -1,16 +1,9 @@
 import numpy as np
 import torch
-import torch.functional as F
-import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from string import ascii_lowercase
-# import nltk
-# nltk.download('wordnet')
-# from nltk.corpus import wordnet as wn
-# nltk.download('cmudict')
-# from nltk.corpus import cmudict
-import os
 from pathlib import Path
+import requests
 
 class Words:
     """
@@ -33,20 +26,24 @@ class Words:
             arr = [i.item() for i in arr]
         return ''.join([cls.itoc[i] for i in arr if i in range(1, 27)])
 
-    def __init__(self, vec_path: str = None):
+    def __init__(self, save_path: str = None):
         super().__init__()
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.vec_path = Path(__file__).parent / 'simvecs' if vec_path is None else Path(vec_path)
-
         self.mappings = {}
-        with open(self.vec_path, 'r') as file:
-            for line in file.read().splitlines():
-                m = line.split()
-                if m[0].isalpha() and len(m[0]) <= 16:  # only words with alphabetic chars and length <= 16
-                    self.mappings[m[0].lower()] = torch.tensor([float(x) for x in m[1:]])
+        save_path = 'simvecs' if save_path is None else save_path
+        
+        # use vector embeddings from https://github.com/rahulsrma26/phonetic-word-embedding
+        simvecs_url = "https://raw.githubusercontent.com/rahulsrma26/phonetic-word-embedding/refs/heads/dev/vector_embeddings/simvecs"
+        response = requests.get(simvecs_url)
+        response.raise_for_status()  # Ensure we got a valid response
+        if response.status_code == 200:
+            with open(save_path, 'r') as file:
+                for line in file.read().splitlines():
+                    m = line.split()
+                    if m[0].isalpha() and len(m[0]) <= 16:  # only words with alphabetic chars and length <= 16
+                        self.mappings[m[0].lower()] = torch.tensor([float(x) for x in m[1:]])
 
-        self.encoded_words = torch.stack([self.enc(w) for w in self.mappings.keys()]).to(self.device)
-        self.embeddings = torch.stack(list(self.mappings.values())).to(self.device)
+        self.encoded_words = torch.stack([self.enc(w) for w in self.mappings.keys()])
+        self.embeddings = torch.stack(list(self.mappings.values()))
 
     def train_test_split(self, train_pct: float = 0.8):
         """Generate train/test splits compatible with PyTorch DataLoader"""

@@ -183,7 +183,7 @@ class Block(nn.Module):
     
 
 class PhonemeBERT(nn.Module):
-    """BERT-like model for phoneme to embedding mapping"""
+    """BERT-like model for word to phonetic embedding mapping"""
     def __init__(self, config: Config = None, **kwargs):
         super().__init__()
         self.config = Config(**kwargs) if config is None else config
