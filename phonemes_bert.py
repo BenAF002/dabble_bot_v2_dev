@@ -35,10 +35,8 @@ def train_epoch(model, dataset, loss_fn, optimizer, batch_size, track_losses: bo
 
         if track_losses: losses.append(loss.item())
 
-    if track_losses:
-        return total_loss / n_batches, losses
-    else:
-        return total_loss / n_batches
+    return total_loss / n_batches, losses
+
 
 @torch.no_grad()  # Decorator ensures no gradients are computed
 def eval_loss(model, dataset, loss_fn, sample_frac=0.2):
@@ -71,7 +69,7 @@ def eval_loss(model, dataset, loss_fn, sample_frac=0.2):
 
 
 def training_loop(model, train_data, test_data, loss_fn, optimizer, 
-               batch_size: int = 64, n_epochs: int = 10, eval_sample_frac: float = 0.4):
+                  batch_size: int = 64, n_epochs: int = 10, eval_sample_frac: float = 0.4):
     """Full training loop over multiple epochs."""
     
     # set torch matmul precision to high for better performance
@@ -79,11 +77,11 @@ def training_loop(model, train_data, test_data, loss_fn, optimizer,
         torch.set_float32_matmul_precision('high')
 
     start = time.time()
-    # training_losses = []
+    training_losses = []
     for epoch in range(n_epochs):
-        train_loss = train_epoch(model, train_data, loss_fn, optimizer, batch_size)
+        train_loss, losses = train_epoch(model, train_data, loss_fn, optimizer, batch_size)
         test_loss = eval_loss(model, test_data, loss_fn, sample_frac=eval_sample_frac)
-        # training_losses.append(train_loss)
+        training_losses.append(losses)
         run_time = time.time() - start
         eta = divmod((run_time / (epoch + 1)) * (n_epochs - epoch - 1), 60)
         print(
@@ -93,7 +91,7 @@ def training_loop(model, train_data, test_data, loss_fn, optimizer,
 
 
 # ----- model components -----
-@dataclass(eq=False)  # eq=False enables child classes to still be hashable (long story)
+@dataclass
 class Config:
     """Configuration class for model hyperparameters"""
     vocab_size: int = 32  # 26 letters + padding + '<sos>' + '<eos>' + nulls for better dimension alignment
@@ -187,7 +185,7 @@ class PhonemeBERT(nn.Module):
     def __init__(self, config: Config = None, **kwargs):
         super().__init__()
         self.config = Config(**kwargs) if config is None else config
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
         if 'cls' in self.config.pool.lower():
             self.config.block_size += 1  # update for cls token
