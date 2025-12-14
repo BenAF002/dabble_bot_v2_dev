@@ -26,21 +26,19 @@ class Words:
             arr = [i.item() for i in arr]
         return ''.join([cls.itoc[i] for i in arr if i in range(1, 27)])
 
-    def __init__(self, save_path: str = None):
+    def __init__(self):
         super().__init__()
         self.mappings = {}
-        save_path = 'simvecs' if save_path is None else save_path
         
         # use vector embeddings from https://github.com/rahulsrma26/phonetic-word-embedding
         simvecs_url = "https://raw.githubusercontent.com/rahulsrma26/phonetic-word-embedding/refs/heads/dev/vector_embeddings/simvecs"
         response = requests.get(simvecs_url)
         response.raise_for_status()  # Ensure we got a valid response
         if response.status_code == 200:
-            with open(save_path, 'r') as file:
-                for line in file.read().splitlines():
-                    m = line.split()
-                    if m[0].isalpha() and len(m[0]) <= 16:  # only words with alphabetic chars and length <= 16
-                        self.mappings[m[0].lower()] = torch.tensor([float(x) for x in m[1:]])
+            for line in response.text().splitlines():
+                m = line.split()
+                if m[0].isalpha() and len(m[0]) <= 16:  # only words with alphabetic chars and length <= 16
+                    self.mappings[m[0].lower()] = torch.tensor([float(x) for x in m[1:]])
 
         self.encoded_words = torch.stack([self.enc(w) for w in self.mappings.keys()])
         self.embeddings = torch.stack(list(self.mappings.values()))
