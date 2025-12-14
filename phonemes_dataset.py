@@ -35,7 +35,7 @@ class Words:
         response = requests.get(simvecs_url)
         response.raise_for_status()  # Ensure we got a valid response
         if response.status_code == 200:
-            for line in response.text().splitlines():
+            for line in response.text.splitlines():
                 m = line.split()
                 if m[0].isalpha() and len(m[0]) <= 16:  # only words with alphabetic chars and length <= 16
                     self.mappings[m[0].lower()] = torch.tensor([float(x) for x in m[1:]])
