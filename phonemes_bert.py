@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-import torch.functional as F
+from torch.nn import functional as F
 import torch.nn as nn
 import math
 from dataclasses import dataclass
