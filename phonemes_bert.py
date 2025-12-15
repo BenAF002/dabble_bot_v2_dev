@@ -48,14 +48,15 @@ def eval_loss(model, dataset, loss_fn, sample_frac=0.2):
     model.eval()
 
     X, Y = dataset.encoded_words, dataset.embeddings
+    X, Y = X.to(model.device), Y.to(model.device)
     try:
         n_samples = max(1, int(X.shape[0] * sample_frac))
-        indices = torch.randperm(X.shape[0], device=X.device)[:n_samples]
+        indices = torch.randperm(X.shape[0], device=model.device)[:n_samples]
         
         preds = model(X[indices])
         
         if isinstance(loss_fn, nn.CosineEmbeddingLoss):
-            target = torch.ones(preds.shape[0], device=preds.device)
+            target = torch.ones(preds.shape[0], device=model.device)
             loss = loss_fn(preds, Y[indices], target)
         else:
             loss = loss_fn(preds, Y[indices])
@@ -95,7 +96,7 @@ def training_loop(model, train_data, test_data, loss_fn, optimizer,
 class Config:
     """Configuration class for model hyperparameters"""
     vocab_size: int = 32  # 26 letters + padding + '<sos>' + '<eos>' + nulls for better dimension alignment
-    block_size: int = 17
+    block_size: int = 18
     n_emb: int = 64
     n_heads: int = 2
     head_size: int = n_emb // n_heads
