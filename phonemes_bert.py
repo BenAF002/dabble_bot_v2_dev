@@ -6,6 +6,7 @@ import math
 from dataclasses import dataclass
 from torch.utils.data import DataLoader
 import time
+import warnings
 
 # ----- training functions -----
 def train_epoch(model, dataset, loss_fn, optimizer, batch_size, track_losses: bool = False):
@@ -77,18 +78,22 @@ def training_loop(model, train_data, test_data, loss_fn, optimizer,
     if torch.get_float32_matmul_precision() != 'high':
         torch.set_float32_matmul_precision('high')
 
-    start = time.time()
-    training_losses = []
-    for epoch in range(n_epochs):
-        train_loss, losses = train_epoch(model, train_data, loss_fn, optimizer, batch_size)
-        test_loss = eval_loss(model, test_data, loss_fn, sample_frac=eval_sample_frac)
-        training_losses.append(losses)
-        run_time = time.time() - start
-        eta = divmod((run_time / (epoch + 1)) * (n_epochs - epoch - 1), 60)
-        print(
-            f"Epoch {epoch+1}/{n_epochs} - Train Loss: {train_loss:.4f}, Test Loss: {test_loss:.4f}"
-            + " | ETA: {min:,.0f} min, {sec:,.0f} sec".format(min=eta[0], sec=eta[1])
-        )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        start = time.time()
+        training_losses = []
+        for epoch in range(n_epochs):
+            train_loss, losses = train_epoch(model, train_data, loss_fn, optimizer, batch_size)
+            test_loss = eval_loss(model, test_data, loss_fn, sample_frac=eval_sample_frac)
+            training_losses.append(losses)
+
+            if model.device == 'cuda': torch.cuda.synchronize()
+            run_time = time.time() - start
+            eta = divmod((run_time / (epoch + 1)) * (n_epochs - epoch - 1), 60)
+            print(
+                f"Epoch {epoch+1}/{n_epochs} - Train Loss: {train_loss:.4f}, Test Loss: {test_loss:.4f}"
+                + " | ETA: {min:,.0f} min, {sec:,.0f} sec".format(min=eta[0], sec=eta[1])
+            )
 
 
 # ----- model components -----
