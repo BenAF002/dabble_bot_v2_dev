@@ -50,9 +50,10 @@ class DecoderGRU(nn.Module):
             warm_start_embeddings=None,
         ):
         super().__init__()
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.input_size = input_size
         self.hidden_size = hidden_size
-        self.vocab_size = 29  # vocab_size: 27 (a-z + padding) + 2 (SOS, EOS) = ~29
+        self.vocab_size = 32  # vocab_size: 27 (a-z + padding) + 2 (SOS, EOS) + nulls for dim alignment
 
         # optionally inherit character embeddings from pretrained model
         if warm_start_embeddings is None:
@@ -63,15 +64,18 @@ class DecoderGRU(nn.Module):
         self.cell = GRU(input_size, hidden_size)
         self.proj = nn.Linear(hidden_size, self.vocab_size)
 
-    def forward(self, phonetic_input, target_seq, hidden=None):
+    def forward(self, phonetic_input, char_seq, hidden=None):
         """Forward pass with teacher-forcing"""
-        B, T = target_seq.shape
+        input_seq = char_seq[:, :-1]  # ensures only CURRENT char is passed as input
+        target_seq = char_seq[:, 1:]  # ensures only NEXT char is used as target
+        B, T = char_seq.shape
+
         if hidden is None:
             h_t = torch.zeros((B, self.hidden_size), device=phonetic_input.device)
         else:
             h_t = hidden
         
-        char_emb = self.char_embedding(target_seq)
+        char_emb = self.char_embedding(input_seq)
         phonetic_input = phonetic_input.unsqueeze(1).repeat(1, T, 1)
         x = torch.cat([char_emb, phonetic_input], dim=2)
 
@@ -84,7 +88,11 @@ class DecoderGRU(nn.Module):
             seq_outputs.append(output_t)
                     
         logits = torch.stack(seq_outputs, dim=1)  # B, T, vs
-        return logits
+
+        targets = target_seq.reshape(-1).to(dtype=torch.long)
+        loss = F.cross_entropy(logits.view(-1, self.vocab_size), targets, ignore_index=0)
+
+        return logits, loss
 
     def predict(self, phonetic_input, max_len: int = 17):
         """
@@ -105,7 +113,7 @@ class DecoderGRU(nn.Module):
                 char_emb = self.char_embedding(char_input).squeeze(1)
                 x_t = torch.cat([char_emb, phonetic_input], dim=1)  # B, C := 64+50
                 h_t = self.cell(x_t, h_t)  # B, H := hidden_size
-                logits_t = self.proj(h_t)  # B, vocab_size := 29
+                logits_t = self.proj(h_t)  # B, vocab_size := 32
 
                 probs = F.softmax(logits_t, dim=-1)  # B, vocab_size
                 next_char = torch.multinomial(probs, num_samples=1)  # B, 1
@@ -140,7 +148,7 @@ def train_epoch(model, dataset, loss_fn, optimizer, batch_size, track_losses: bo
         input_seq = yb[:, :-1]  # ensures only CURRENT char is passed as input
         target_seq = yb[:, 1:]  # ensures only NEXT char is used as taget
         
-        logits = model(xb, input_seq)
+        logits = model(xb, yb)
         
         logits = logits.view(-1, model.vocab_size)
         targets = target_seq.reshape(-1).to(dtype=torch.long)

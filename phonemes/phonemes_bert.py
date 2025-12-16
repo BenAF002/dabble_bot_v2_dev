@@ -149,7 +149,8 @@ class PhonemeBERT(nn.Module):
             pooled = pre_pool[:, 0, :]                                             # (B, C)
 
         logits = self.projection(pooled)                                           # (B, 50)
-        target = torch.ones(X.shape[0], device=self.device)
-        loss = nn.CosineEmbeddingLoss(logits, X, target)
+        target = torch.ones(logits.shape[0], device=self.device)
+        criterion = nn.CosineEmbeddingLoss()
+        loss = criterion(logits, Y, target)
 
         return logits, loss

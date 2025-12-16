@@ -13,11 +13,20 @@ def train_epoch(model, dataset, optimizer, batch_size: int, track_losses: bool =
     n_batches = len(dl) 
     total_loss = 0
 
+    # determine model type
+    model_type = model.__class__.__name__
+
     losses = []
     for xb, yb in dl:
         xb, yb = xb.to(model.device), yb.to(model.device)
 
-        optimizer.zero_grad()  
+        # swap these if decoding
+        if model.__class__.__name__ == 'DecoderGRU':
+            xb, yb = yb, xb
+            print(xb.dtype, yb.dtype)
+            print(xb.shape, yb.shape)
+
+        optimizer.zero_grad() 
 
         # cast to BF16 if supported
         if torch.cuda.is_bf16_supported():
@@ -45,11 +54,12 @@ def eval_loss(model, dataset):
 
     X, Y = dataset.encoded_words, dataset.embeddings
     X, Y = X.to(model.device), Y.to(model.device)
+    # swap these if decoding
+    if model.__class__.__name__ == 'DecoderGRU':
+        X, Y = Y, X
     try:
         indices = torch.randperm(X.shape[0], device=model.device)
-        
         logits, loss = model(X[indices], Y[indices])
-        
         return loss.item()
     
     finally:
