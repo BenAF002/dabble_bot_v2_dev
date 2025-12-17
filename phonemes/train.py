@@ -21,10 +21,8 @@ def train_epoch(model, dataset, optimizer, batch_size: int, track_losses: bool =
         xb, yb = xb.to(model.device), yb.to(model.device)
 
         # swap these if decoding
-        if model.__class__.__name__ == 'DecoderGRU':
+        if model.model_name == 'DecoderGRU':
             xb, yb = yb, xb
-            print(xb.dtype, yb.dtype)
-            print(xb.shape, yb.shape)
 
         optimizer.zero_grad() 
 
@@ -55,7 +53,7 @@ def eval_loss(model, dataset):
     X, Y = dataset.encoded_words, dataset.embeddings
     X, Y = X.to(model.device), Y.to(model.device)
     # swap these if decoding
-    if model.__class__.__name__ == 'DecoderGRU':
+    if model.model_name == 'DecoderGRU':
         X, Y = Y, X
     try:
         indices = torch.randperm(X.shape[0], device=model.device)
