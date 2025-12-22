@@ -46,7 +46,7 @@ class CausalSelfAttention(nn.Module):
         super().__init__()
 
         assert config.n_emb % config.n_head == 0, "Embedding Space not evenly divisible amongst attention heads"
-
+        self.config = config
         self.c_attn = nn.Linear(config.n_emb, 3 * config.n_emb)  
         self.c_proj = nn.Linear(config.n_emb, config.n_emb)      
 
