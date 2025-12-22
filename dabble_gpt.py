@@ -15,6 +15,7 @@ class Config:
     n_head: int = 12
     n_emb: int = 768
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
+    dropout: float = 0.0
 
 
 class LoRALayer(nn.Module):
