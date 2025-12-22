@@ -50,7 +50,7 @@ class CausalSelfAttention(nn.Module):
         self.c_attn = nn.Linear(config.n_emb, 3 * config.n_emb)  
         self.c_proj = nn.Linear(config.n_emb, config.n_emb)      
 
-        self.dropout = nn.Dropout(self.config.dropout)
+        self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
         B, T, C = x.size()  # batch size, sequence length, embedding dimensionality (n_emb)
