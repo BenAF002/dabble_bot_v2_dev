@@ -47,29 +47,25 @@ class CausalSelfAttention(nn.Module):
 
         assert config.n_emb % config.n_head == 0, "Embedding Space not evenly divisible amongst attention heads"
 
-        self.c_attn = nn.Linear(config.n_emb, 3 * config.n_emb)  # 
-        self.c_proj = nn.Linear(config.n_emb, config.n_emb)      # "projection" layer
+        self.c_attn = nn.Linear(config.n_emb, 3 * config.n_emb)  
+        self.c_proj = nn.Linear(config.n_emb, config.n_emb)      
 
-        self.n_head = config.n_head
-        self.n_emb = config.n_emb
-
-        # causal mask -- called "bias" to match naming convention in GPT-2 codebase
-        self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
-                                          .view(1, 1, config.block_size, config.block_size)
-                                          .to(config.device))
+        self.dropout = nn.Dropout(self.config.dropout)
 
     def forward(self, x):
         B, T, C = x.size()  # batch size, sequence length, embedding dimensionality (n_emb)
 
         qkv = self.c_attn(x)           # (B, T, 3 * C)
         q, k, v = qkv.split(C, dim=2)  # each (B, T, C)
-        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
-        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)  # each is (B, nh, T, hs) where nh:=n_head and hs:=head_size
-
-        y = F.scaled_dot_product_attention(q, k, v, is_causal=True)  # FlashAttention
+        q = q.view(B, T, self.config.n_heads, C // self.config.n_heads).transpose(1, 2)
+        k = k.view(B, T, self.config.n_heads, C // self.config.n_heads).transpose(1, 2)
+        v = v.view(B, T, self.config.n_heads, C // self.config.n_heads).transpose(1, 2) 
+        
+        # FlashAttention
+        y = F.scaled_dot_product_attention(q, k, v, is_causal=True, dropout_p=self.config.dropout)
         y = y.transpose(1, 2).contiguous().view(B, T, C)  # re-assemble all head outputs side by side --> (B, T, C)
-        y = self.c_proj(y)
+        y = self.c_proj(y)   # linear "projection"
+        y = self.dropout(y)  # "residual" dropout
         return y
 
 
@@ -140,8 +136,9 @@ class GPT(nn.Module):
             return logits, loss
         return logits
 
-    # method for drawing samples from the model
-    def generate(self, seq, max_new_tokens: int |None = None):
+    @torch.no_grad()
+    def generate(self, seq, max_new_tokens: int | None = None, top_k: int | None = 50):
+        if self.training: self.eval()
         if isinstance(seq, str):
             seq = torch.tensor(token_enc.encode(seq)).reshape(1, -1).to(self.config.device)
 
@@ -153,10 +150,15 @@ class GPT(nn.Module):
         for _ in range(token_lim):
             logits = self(seq, targets=None)
             logits = logits[:, -1, :]  # consider only the last token
+            # crop to top_k logits if provided
+            if top_k is not None:
+                v, _ = torch.topk(logits, top_k)
+                logits[logits < v[:, [-1]]] = -float('Inf')
+
             probs = F.softmax(logits, dim=-1)
             seq_next = torch.multinomial(probs, num_samples=1)  # sample from distribution
-            if seq_next.item() == token_enc.max_token_value:
-                return token_enc.decode(seq.detach().numpy())   # break if eos token predicted
+            # if seq_next.item() == token_enc.max_token_value:
+            #     return token_enc.decode(seq.detach().numpy())   # break if eos token predicted
             seq = torch.cat((seq, seq_next), dim=1)  # append sampled index to running sequence
 
         return token_enc.decode(seq.detach().numpy())
