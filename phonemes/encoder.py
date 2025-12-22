@@ -121,7 +121,7 @@ class EncoderBERT(nn.Module):
             nn.Linear(self.config.n_emb, 50)
         )
     
-    def forward(self, X, Y):
+    def forward(self, X, Y = None):
         B, T = X.shape
 
         mask = (X != 0).float().unsqueeze(-1)
@@ -152,6 +152,7 @@ class EncoderBERT(nn.Module):
         logits = self.projection(pooled)                                           # (B, 50)
         target = torch.ones(logits.shape[0], device=self.device)
         criterion = nn.CosineEmbeddingLoss()
-        loss = criterion(logits, Y, target)
-
-        return logits, loss
+        if Y:
+            loss = criterion(logits, Y, target)
+            return logits, loss
+        return logits
