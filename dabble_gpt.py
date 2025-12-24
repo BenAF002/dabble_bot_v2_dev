@@ -227,7 +227,7 @@ class GPT(nn.Module):
             probs = F.softmax(logits, dim=-1)
             seq_next = torch.multinomial(probs, num_samples=1)  # sample from distribution
             if seq_next.item() == token_enc.max_token_value:
-                return token_enc.decode(seq[:, :-1].cpu().detach().numpy())   # break if eos token predicted
+                return token_enc.decode(seq.cpu().detach().numpy()[0])   # break if eos token predicted
             seq = torch.cat((seq, seq_next), dim=1)  # append sampled index to running sequence
         
         # clear kv_caches from the model
