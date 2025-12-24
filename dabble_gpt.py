@@ -187,7 +187,8 @@ class GPT(nn.Module):
         x = self.transformer.ln_f(x)  # final layer norm
         logits = self.lm_head(x)      # logits for each token in vocab -- (B, T, vocab_size)
         if targets is not None:
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
+            loss = F.cross_entropy(
+                logits.view(-1, logits.size(-1)), targets.view(-1))
             return logits, loss
         return logits
 
@@ -247,7 +248,7 @@ class GPT(nn.Module):
             'gpt2-large':  dict(n_layer=36, n_head=20, n_emb=1280),
             'gpt2-xl':     dict(n_layer=48, n_head=25, n_emb=1600),
         }[model_type]
-        config_args.update(dict(block_size=1024, vocab_size=50257))  # common args for all GPT-2 models
+        config_args.update(dict(block_size=1024, vocab_size=50257))
         config = Config(**config_args)
         model = GPT(config)
         sd = model.state_dict()
