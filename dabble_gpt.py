@@ -56,7 +56,7 @@ class CausalSelfAttention(nn.Module):
         self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                           .view(1, 1, config.block_size, config.block_size))
 
-        self.kv_cache = None  # init modul-level kv cache -- will need to clear this at each new inference loop
+        self.kv_cache = None  # init module-level kv cache -- will need to clear this at each new inference loop
 
     def forward(self, x):
         """Ordinary forward with flash attention"""
@@ -199,6 +199,11 @@ class GPT(nn.Module):
         if isinstance(seq, str):
             seq = torch.tensor(token_enc.encode(seq)).reshape(1, -1).to(self.config.device)
 
+        # clear kv_caches from the model
+        for name, module in self.named_modules():
+            if isinstance(module, CausalSelfAttention):
+                setattr(module, 'kv_cache', None)
+
         if max_new_tokens is not None:
             token_lim = min((self.config.block_size - len(seq)), max_new_tokens)
         else:
@@ -230,11 +235,6 @@ class GPT(nn.Module):
                 return token_enc.decode(seq.cpu().detach().numpy()[0])   # break if eos token predicted
             seq = torch.cat((seq, seq_next), dim=1)  # append sampled index to running sequence
         
-        # clear kv_caches from the model
-        for name, module in self.named_modules():
-            if isinstance(module, CausalSelfAttention):
-                setattr(module, 'kv_cache', None)
-
         return token_enc.decode(seq.cpu().detach().numpy()[0])
 
     @classmethod
@@ -277,12 +277,12 @@ class GPT(nn.Module):
 
         # if using lora, freeze parameters and replace linear layers with LoRA layers
         if lora_rank > 0:
+            # freeze all parameters initially
+            for p in model.parameters():
+                p.requires_grad = False  
+            # replace linear layers with LoRA layers (in CausalAttention and MLP)
             for name, module in model.named_modules():
-                
-                for p in module.parameters():
-                    p.requires_grad = False  # freeze all parameters initially
-
-                if isinstance(module, nn.Linear) and ('c_attn' in name or 'c_proj' in name):  # only apply LoRA to attn and proj layers
+                if isinstance(module, nn.Linear) and any(k in name for k in['c_attn', 'c_proj', 'c_fc']):
                     parent_name = '.'.join(name.split('.')[:-1])
                     attr_name = name.split('.')[-1]
                     
