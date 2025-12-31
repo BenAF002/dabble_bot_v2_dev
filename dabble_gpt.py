@@ -65,8 +65,8 @@ class CausalSelfAttention(nn.Module):
         nh = self.config.n_head  # number of attention heads
         hs = C // nh             # size of each attention head
 
-        qkv = self.c_attn(x)           # (B, T, 3 * C)
-        q, k, v = qkv.split(C, dim=2)  # (B, T, C) each
+        qkv = self.c_attn(x)                      # (B, T, 3 * C)
+        q, k, v = qkv.split(C, dim=2)             # (B, T, C) each
         q = q.view(B, T, nh, hs).transpose(1, 2)  # (B, nh, T, hs)
         k = k.view(B, T, nh, hs).transpose(1, 2)  # (B, nh, T, hs)
         v = v.view(B, T, nh, hs).transpose(1, 2)  # (B, nh, T, hs)
@@ -85,8 +85,8 @@ class CausalSelfAttention(nn.Module):
         nh = self.config.n_head  # number of attention heads
         hs = C // nh             # size of each attention head
 
-        qkv = self.c_attn(x)           # (B, T, 3 * C)
-        q, k, v = qkv.split(C, dim=2)  # (B, T, C) each
+        qkv = self.c_attn(x)                      # (B, T, 3 * C)
+        q, k, v = qkv.split(C, dim=2)             # (B, T, C) each
         q = q.view(B, T, nh, hs).transpose(1, 2)  # (B, nh, T, hs)
         k = k.view(B, T, nh, hs).transpose(1, 2)  # (B, nh, T, hs)
         v = v.view(B, T, nh, hs).transpose(1, 2)  # (B, nh, T, hs)
@@ -193,8 +193,15 @@ class GPT(nn.Module):
         return logits
 
     @torch.no_grad()
-    def generate(self, seq, max_new_tokens: int | None = None, top_k: int | None = 50):
-        """Generate sequences from model using kv-caching"""
+    def generate(self, seq, max_new_tokens: int | None = None, top_k: int = 50, use_kv_cache: bool = True) -> str: 
+        """
+        Generate sequences from model
+        Args:
+            seq: Prompt sequence
+            max_new_tokens: Max new tokens to generate, limit 1024 if None. Dfaults to None
+            top_k: Limit token sample to top k logits. Defaults to 50
+            use_kv_cache: Generate with KV caching if True
+        """
         if self.training: self.eval()
         if isinstance(seq, str):
             seq = torch.tensor(token_enc.encode(seq)).reshape(1, -1).to(self.config.device)
@@ -209,19 +216,22 @@ class GPT(nn.Module):
         else:
             token_lim = (self.config.block_size - len(seq))
         
-        # update to use kv-cache
+        
         current_pos = 0
         for i in range(token_lim):
-            if i == 0:
-                x = seq  # full prompt on first pass
-                pos_offset = 0
-                current_pos = x.size(1)
+            if use_kv_cache:
+                if i == 0:
+                    x = seq  # full prompt on first pass
+                    pos_offset = 0
+                    current_pos = x.size(1)
+                else:
+                    x = seq[:, -1:]  # all other passes, use last token
+                    pos_offset = current_pos
+                    current_pos += 1
+                logits = self(x, targets=None, use_kv_cache=True, pos_offset=pos_offset)
             else:
-                x = seq[:, -1:]  # all other passes, use last token
-                pos_offset = current_pos
-                current_pos += 1
+                logits = self(seq, targets=None, use_kv_cache=False)
 
-            logits = self(x, targets=None, use_kv_cache=True, pos_offset=pos_offset)
             logits = logits[:, -1, :]  # consider only the last token
 
             # crop to top_k logits if provided
